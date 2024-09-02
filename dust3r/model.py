@@ -12,10 +12,10 @@ import huggingface_hub
 
 from .utils.misc import fill_default_args, freeze_all_params, is_symmetrized, interleave, transpose_to_landscape
 from .heads import head_factory
-from dust3r.patch_embed import get_patch_embed
+from submodules.dust3r.dust3r.patch_embed import get_patch_embed
 
-import dust3r.utils.path_to_croco  # noqa: F401
-from models.croco import CroCoNet  # noqa
+import submodules.dust3r.dust3r.utils.path_to_croco  # noqa: F401
+from submodules.dust3r.croco.models.croco import CroCoNet  # noqa
 
 inf = float('inf')
 
@@ -208,3 +208,46 @@ class AsymmetricCroCo3DStereo (
 
         res2['pts3d_in_other_view'] = res2.pop('pts3d')  # predict view2's pts3d in view1's frame
         return res1, res2
+
+    def forward_intermediates(self, view1, layer):
+        shape = view1['true_shape']
+        img = view1['img']
+
+        b, c, h, w = img.shape
+
+        if layer < len(self.enc_blocks):
+            x, pos = self.patch_embed(img, true_shape=shape)
+
+            # add positional embedding without cls token
+            assert self.enc_pos_embed is None
+
+            # now apply the transformer encoder and normalization
+            blocks = self.enc_blocks[:layer]
+            for blk in blocks:
+                x = blk(x, pos)
+            dense_tokens = x.reshape(b, h // self.patch_embed.patch_size[0], w // self.patch_embed.patch_size[1], -1).permute(0, 3, 1, 2).contiguous()
+            return [(dense_tokens, None)]
+
+        feat, pos, _ = self._encode_image(img, shape)
+        
+        layer -= len(self.enc_blocks)
+
+        final_output = [(feat, feat)]  # before projection
+        # project to decoder dim
+        f1 = self.decoder_embed(feat)
+        f2 = self.decoder_embed(feat)
+
+        final_output.append((f1, f2))
+        dec_blocks = self.dec_blocks[:layer]
+        dec_blocks2 = self.dec_blocks2[:layer]
+        for blk1, blk2 in zip(dec_blocks, dec_blocks2):
+            # img1 side
+            f1, _ = blk1(*final_output[-1][::+1], pos, pos)
+            # img2 side
+            f2, _ = blk2(*final_output[-1][::-1], pos, pos)
+            # store the result
+            final_output.append((f1, f2))
+
+        dense_tokens = final_output[-1][0]
+        dense_tokens = dense_tokens.reshape(b, h // self.patch_embed.patch_size[0], w // self.patch_embed.patch_size[0], -1).permute(0, 3, 1, 2).contiguous()
+        return [(dense_tokens, None)]
