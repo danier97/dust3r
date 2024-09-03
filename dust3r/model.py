@@ -222,7 +222,7 @@ class AsymmetricCroCo3DStereo (
             assert self.enc_pos_embed is None
 
             # now apply the transformer encoder and normalization
-            blocks = self.enc_blocks[:layer]
+            blocks = self.enc_blocks[:layer+1]
             for blk in blocks:
                 x = blk(x, pos)
             dense_tokens = x.reshape(b, h // self.patch_embed.patch_size[0], w // self.patch_embed.patch_size[1], -1).permute(0, 3, 1, 2).contiguous()
@@ -238,8 +238,8 @@ class AsymmetricCroCo3DStereo (
         f2 = self.decoder_embed(feat)
 
         final_output.append((f1, f2))
-        dec_blocks = self.dec_blocks[:layer]
-        dec_blocks2 = self.dec_blocks2[:layer]
+        dec_blocks = self.dec_blocks[:layer+1]
+        dec_blocks2 = self.dec_blocks2[:layer+1]
         for blk1, blk2 in zip(dec_blocks, dec_blocks2):
             # img1 side
             f1, _ = blk1(*final_output[-1][::+1], pos, pos)
