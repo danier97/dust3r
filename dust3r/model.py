@@ -12,10 +12,10 @@ import huggingface_hub
 
 from .utils.misc import fill_default_args, freeze_all_params, is_symmetrized, interleave, transpose_to_landscape
 from .heads import head_factory
-from dust3r.patch_embed import get_patch_embed
+from submodules.mast3r.dust3r.dust3r.patch_embed import get_patch_embed
 
-import dust3r.utils.path_to_croco  # noqa: F401
-from models.croco import CroCoNet  # noqa
+import submodules.mast3r.dust3r.dust3r.utils.path_to_croco  # noqa: F401
+from submodules.mast3r.dust3r.croco.models.croco import CroCoNet  # noqa
 
 inf = float('inf')
 
